@@ -8,7 +8,7 @@ const START_PAGE  = 0;
 const END_PAGE    = 1;
 
 // DOMAIN where the download url should refer to
-const DOMAIN      = 'http://files.danskkulturarv.dk';   // Without / at the end
+const DOMAIN      = 'domain';   // Without / at the end
 
 // Where the PDF should be stored
 const FILE_FOLDER = '../programoversigter'; // Without / at the end

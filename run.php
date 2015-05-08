@@ -67,7 +67,7 @@ function loadProgramPage($index) {
 			echo "ERROR: " . $r . "\n";
 			break;
 		} else {
-			// echo 'Finished program ' . (string) $r->Id . '<br /><br />';
+			echo "Finished program " . (string) $r->Id . "\n\n";
 		}
 	}
 	echo "Finished page " . $index . "\n";

@@ -3,12 +3,12 @@
 =            EDIT ME            =
 ===============================*/
 // CHAOS page size, start page and end page
-const PAGE_SIZE   = 5;
+const PAGE_SIZE   = 1000;
 const START_PAGE  = 0;
-const END_PAGE    = 1;
+const END_PAGE    = -1;
 
 // DOMAIN where the download url should refer to
-const DOMAIN      = 'http://files.danskkulturarv.dk';   // Without / at the end
+const DOMAIN      = 'DOMAIN';   // Without / at the end
 
 // Where the PDF should be stored
 const FILE_FOLDER = '../programoversigter'; // Without / at the end
@@ -17,6 +17,9 @@ const FILE_FOLDER = '../programoversigter'; // Without / at the end
 // Elasticsearch index and type
 const ES_INDEX = 'programoversigter';
 const ES_TYPE  = 'programoversigt';
+
+// Number of tries when getting time outs
+const MAX_TRIES = 10;
 /*-----  End of EDIT ME  ------*/
 
 
@@ -40,12 +43,11 @@ $params['hosts'] = array (
 $client = new Elasticsearch\Client($params);
 
 $index = START_PAGE;
-$end_index = END_PAGE;
 
 echo 'Started!';
 while (loadProgramPage($index++)) {
 	echo ' ' . ($index * PAGE_SIZE) . ' \n';
-	if ($index > $end_index) {
+	if (END_PAGE > 0 && $index > $end_index) {
 		break;
 	}
 }
@@ -55,6 +57,9 @@ echo "FINISHED: " . (END_PAGE - START_PAGE) . " pages (~" . ((END_PAGE - START_P
 
 function loadProgramPage($index) {
 	$xml = getXml('http://api.larm.fm/v6/View/Get?view=Search&sort=PubStartDate%2Bdesc&filter=%28Type%3ASchedule%20OR%20Type%3AScheduleNote%29&pageIndex=' . $index . '&pageSize=' . PAGE_SIZE . '&sessionGUID=049da351-b81f-424e-82c4-1162926d3688&format=xml2&userHTTPStatusCodes=False');
+	if (!$xml) {
+		return true; // temp
+	}
 	$results = $xml->xpath('/PortalResponse/Body/Results/SearchViewData');
 	if (empty($results)) {
 		return false;
@@ -65,9 +70,9 @@ function loadProgramPage($index) {
 		}
 		if (!loadProgramData((string) $r->Id)) {
 			echo "ERROR: " . $r . "\n";
-			break;
+			//break;
 		} else {
-			// echo 'Finished program ' . (string) $r->Id . '<br /><br />';
+			echo "Finished program " . (string) $r->Id . "\n\n";
 		}
 	}
 	echo "Finished page " . $index . "\n";
@@ -76,6 +81,9 @@ function loadProgramPage($index) {
 
 function loadProgramData($id) {
 	$xml = getXml('http://api.larm.fm/v6/View/Get?view=Object&query=' . $id . '&pageIndex=0&pageSize=' . PAGE_SIZE . '&sessionGUID=049da351-b81f-424e-82c4-1162926d3688&format=xml2&userHTTPStatusCodes=False');
+	if (!$xml) {
+		return false;
+	}
 	$result = $xml->xpath('/PortalResponse/Body/Results/Result');
 	if (empty($result)) {
 		return false;
@@ -135,7 +143,15 @@ function loadProgramData($id) {
 }
 
 function getXml($url) {
-	return simplexml_load_file($url);
+	for ($count = 0; $count < MAX_TRIES; $count++) {
+		$xml = @simplexml_load_file($url);
+		if ($xml) {
+			return $xml;
+		}
+		echo "TIMEOUT.. Waiting 60 seconds. Attempt " . ($count + 1);
+		sleep(10 * ($count + 1));
+	}
+	return false;
 }
 
 function checkIfExists($id) {
@@ -168,7 +184,7 @@ function insertObject($id, $title, $filename, $fileUrl, $text, $date, $type) {
 	$indexParams['body']['allText']    	= $text;
 	$indexParams['body']['date']    	= $date;
 	$indexParams['body']['type']    	= $type;
-    
+
 	$ret = $client->index($indexParams);
 
 	if (empty($ret)) {
